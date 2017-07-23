@@ -16,8 +16,9 @@ use crc::crc32;
 use std::collections::HashMap;
 use semver::Version;
 use std::cmp::Ordering;
+use std::time::Instant;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Migration {
     pub version: String,
     pub description: String,
@@ -25,7 +26,8 @@ pub struct Migration {
     pub script: String,
     pub checksum: i32,
     pub execution_time: i32,
-    pub success: bool
+    pub success: bool,
+    pub contents: String
 }
 
 #[derive(Clone, Debug)]
@@ -75,7 +77,8 @@ impl Flyway {
                 script: file.name.clone(),
                 checksum: crc32::checksum_ieee(file.contents.as_bytes()) as i32,
                 execution_time: 0,
-                success: false
+                success: false,
+                contents: file.contents.clone()
             }
         }).ok_or(format!("Failed to parse migration file name: {}", file.name))
     }
@@ -120,6 +123,25 @@ impl Flyway {
         if let Some(newest_existing_migration) = existing_migrations.iter().last() {
             if let Some(older_incoming_migration) = new_migrations.iter().find(|m| migration_comparator(newest_existing_migration, m) != Ordering::Less) {
                 return Err(format!("Incoming new migration is older than existing: {}", older_incoming_migration.script));
+            }
+        }
+
+        for new_migration in new_migrations {
+            let mut new_migration = new_migration.to_owned();
+            let start = Instant::now();
+            let result = self.driver.execute_migration(new_migration.contents.clone());
+            let elapsed = start.elapsed();
+            new_migration.execution_time = (elapsed.as_secs() * 1000 + (elapsed.subsec_nanos() / 1_000_000) as u64) as i32;
+            match result {
+                Ok(()) => {
+                    new_migration.success = true;
+                    self.driver.save_migration(new_migration)?;
+                },
+                Err(error) => {
+                    new_migration.success = false;
+                    self.driver.save_migration(new_migration)?;
+                    return Err(error)
+                }
             }
         }
 

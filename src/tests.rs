@@ -9,7 +9,8 @@ fn test_migration() -> Migration {
         script: "V1.0.0__.sql".into(),
         checksum: 0,
         execution_time: 0,
-        success: true
+        success: true,
+        contents: "".into()
     }
 }
 
@@ -80,4 +81,31 @@ fn test_migration() -> Migration {
 
     let f = Flyway::new(Box::new(reader), Box::new(driver));
     assert_eq!(f.execute(), Err("Incoming new migration is older than existing: V0.2.0__a.sql".into()));
+}
+
+#[test] fn test_new_migration_is_inserted() {
+    let sc = Scenario::new();
+    let reader = sc.create_mock_for::<Reader>();
+    let driver = sc.create_mock_for::<Driver>();
+    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
+    sc.expect(reader.read_migrations_call().and_return(Ok(vec![
+        MigrationFile { name: "V1.0.0__.sql".into(), contents: "".into() },
+        MigrationFile { name: "V1.0.1__b.sql".into(), contents: "42".into() }
+    ])));
+    sc.expect(driver.get_existing_migrations_call().and_return(Ok(vec![
+        test_migration()
+    ])));
+    sc.expect(driver.execute_migration_call(String::from("42")).and_return(Ok(())));
+    sc.expect(driver.save_migration_call({
+        let mut m = test_migration();
+        m.version = "1.0.1".into();
+        m.description = "b".into();
+        m.script = "V1.0.1__b.sql".into();
+        m.checksum = 841265288;
+        m.contents = "42".into();
+        m
+    }).and_return(Ok(())));
+
+    let f = Flyway::new(Box::new(reader), Box::new(driver));
+    assert_eq!(f.execute(), Ok(()));
 }
