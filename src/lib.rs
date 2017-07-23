@@ -31,7 +31,7 @@ pub struct Migration {
     pub contents: String
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MigrationFile {
     pub name: String,
     pub contents: String
