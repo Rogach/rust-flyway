@@ -5,6 +5,7 @@ extern crate itertools;
 extern crate regex;
 #[macro_use] extern crate lazy_static;
 extern crate crc;
+extern crate semver;
 
 #[cfg(test)] mod tests;
 
@@ -12,6 +13,9 @@ use itertools::join;
 #[cfg(test)] use mockers_derive::derive_mock;
 use regex::Regex;
 use crc::crc32;
+use std::collections::HashMap;
+use semver::Version;
+use std::cmp::Ordering;
 
 #[derive(Clone, Debug)]
 pub struct Migration {
@@ -89,8 +93,13 @@ impl Flyway {
             incoming_migrations.push(migration);
         }
 
-        let existing_migrations = self.driver.get_existing_migrations()?;
-        for existing_migration in existing_migrations {
+        let migration_comparator = |a: &Migration, b: &Migration| {
+            Version::parse(&a.version).unwrap().cmp(&Version::parse(&b.version).unwrap())
+        };
+        incoming_migrations.sort_by(&migration_comparator);
+
+        let mut existing_migrations = self.driver.get_existing_migrations()?;
+        for existing_migration in &existing_migrations {
             match incoming_migrations.iter().find(|m| m.version == existing_migration.version) {
                 Some(incoming_migration) => {
                     if incoming_migration.checksum != existing_migration.checksum {
@@ -98,6 +107,19 @@ impl Flyway {
                     }
                 },
                 None => return Err(format!("Incoming migrations do not contain migration {} - seems you are running code that is older than database contents.", existing_migration.version))
+            }
+        }
+        existing_migrations.sort_by(&migration_comparator);
+
+        let existing_migrations_idx: HashMap<String, &Migration> =
+            existing_migrations.iter().map(|m| (m.script.clone(), m)).collect();
+
+        let new_migrations: Vec<&Migration> =
+            incoming_migrations.iter().filter(|m| !existing_migrations_idx.contains_key(&m.script)).collect();
+
+        if let Some(newest_existing_migration) = existing_migrations.iter().last() {
+            if let Some(older_incoming_migration) = new_migrations.iter().find(|m| migration_comparator(newest_existing_migration, m) != Ordering::Less) {
+                return Err(format!("Incoming new migration is older than existing: {}", older_incoming_migration.script));
             }
         }
 
