@@ -48,3 +48,19 @@ fn test_migration() -> Migration {
     let f = Flyway::new(Box::new(reader), Box::new(driver));
     assert_eq!(f.execute(), Err("Incoming migrations do not contain migration 1.0.0 - seems you are running code that is older than database contents.".into()));
 }
+
+#[test] fn test_checksum_mismatch() {
+    let sc = Scenario::new();
+    let reader = sc.create_mock_for::<Reader>();
+    let driver = sc.create_mock_for::<Driver>();
+    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
+    sc.expect(reader.read_migrations_call().and_return(Ok(vec![
+        MigrationFile { name: "V1.0.0__a.sql".into(), contents: "42".into() }
+    ])));
+    sc.expect(driver.get_existing_migrations_call().and_return(Ok(vec![
+        test_migration()
+    ])));
+
+    let f = Flyway::new(Box::new(reader), Box::new(driver));
+    assert_eq!(f.execute(), Err("Checksum mismatch for migration 1.0.0: existing migration 0, incoming migration 841265288".into()));
+}
