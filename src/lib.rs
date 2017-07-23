@@ -40,7 +40,6 @@ pub struct MigrationFile {
 #[cfg_attr(test, derive_mock)]
 pub trait Driver {
     fn ensure_schema_version_exists(&self) -> Result<(), String>;
-    fn get_failed_migrations(&self) -> Result<Vec<Migration>, String>;
     fn get_existing_migrations(&self) -> Result<Vec<Migration>, String>;
     fn execute_migration(&self, sql: String) -> Result<(), String>;
     fn save_migration(&self, migration: Migration) -> Result<(), String>;
@@ -88,11 +87,6 @@ impl Flyway {
         info!("Executing database migration");
         self.driver.ensure_schema_version_exists()?;
 
-        let failed_migrations = self.driver.get_failed_migrations()?;
-        if !failed_migrations.is_empty() {
-            return Err(format!("Failed migrations detected! Roll back your database and start from a fresh backup. Failed migrations: {}", join(failed_migrations.iter().map(|m| &m.version), ", ")));
-        }
-
         let migration_files = self.reader.read_migrations()?;
         let mut incoming_migrations = Vec::new();
         for migration_file in migration_files.into_iter() {
@@ -106,6 +100,15 @@ impl Flyway {
         incoming_migrations.sort_by(&migration_comparator);
 
         let mut existing_migrations = self.driver.get_existing_migrations()?;
+
+        {
+            let failed_migrations: Vec<&Migration> =
+                existing_migrations.iter().filter(|m| !m.success).collect();
+            if !failed_migrations.is_empty() {
+                return Err(format!("Failed migrations detected! Roll back your database and start from a fresh backup. Failed migrations: {}", join(failed_migrations.iter().map(|m| &m.version), ", ")));
+            }
+        }
+
         for existing_migration in &existing_migrations {
             match incoming_migrations.iter().find(|m| m.version == existing_migration.version) {
                 Some(incoming_migration) => {

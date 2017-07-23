@@ -18,8 +18,9 @@ fn test_migration() -> Migration {
     let sc = Scenario::new();
     let reader = sc.create_mock_for::<Reader>();
     let driver = sc.create_mock_for::<Driver>();
+    sc.expect(reader.read_migrations_call().and_return(Ok(vec![])));
     sc.expect(driver.ensure_schema_version_exists_call().and_return(Ok(())));
-    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![
+    sc.expect(driver.get_existing_migrations_call().and_return(Ok(vec![
         { let mut m = test_migration(); m.success = false; m }
     ])));
     let f = Flyway::new(Box::new(reader), Box::new(driver));
@@ -42,7 +43,6 @@ fn test_migration() -> Migration {
     let reader = sc.create_mock_for::<Reader>();
     let driver = sc.create_mock_for::<Driver>();
     sc.expect(driver.ensure_schema_version_exists_call().and_return(Ok(())));
-    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
     sc.expect(reader.read_migrations_call().and_return(Ok(vec![])));
     sc.expect(driver.get_existing_migrations_call().and_return(Ok(vec![
         test_migration()
@@ -57,7 +57,6 @@ fn test_migration() -> Migration {
     let reader = sc.create_mock_for::<Reader>();
     let driver = sc.create_mock_for::<Driver>();
     sc.expect(driver.ensure_schema_version_exists_call().and_return(Ok(())));
-    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
     sc.expect(reader.read_migrations_call().and_return(Ok(vec![
         MigrationFile { name: "V1.0.0__a.sql".into(), contents: "42".into() }
     ])));
@@ -74,7 +73,6 @@ fn test_migration() -> Migration {
     let reader = sc.create_mock_for::<Reader>();
     let driver = sc.create_mock_for::<Driver>();
     sc.expect(driver.ensure_schema_version_exists_call().and_return(Ok(())));
-    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
     sc.expect(reader.read_migrations_call().and_return(Ok(vec![
         MigrationFile { name: "V0.2.0__a.sql".into(), contents: "42".into() },
         MigrationFile { name: "V1.0.0__.sql".into(), contents: "".into() }
@@ -92,7 +90,6 @@ fn test_migration() -> Migration {
     let reader = sc.create_mock_for::<Reader>();
     let driver = sc.create_mock_for::<Driver>();
     sc.expect(driver.ensure_schema_version_exists_call().and_return(Ok(())));
-    sc.expect(driver.get_failed_migrations_call().and_return(Ok(vec![])));
     sc.expect(reader.read_migrations_call().and_return(Ok(vec![
         MigrationFile { name: "V1.0.0__.sql".into(), contents: "".into() },
         MigrationFile { name: "V1.0.1__b.sql".into(), contents: "42".into() }
