@@ -1,0 +1,14 @@
+[package]
+name = "flyway"
+version = "0.1.0"
+authors = ["Rogach <platon7pronko@gmail.com>"]
+
+[dependencies]
+itertools = "^0.6"
+mockers_derive = { version = "0.6.1", path = "../sources/mockers/mockers_derive" }
+regex = "^0.2"
+lazy_static = "^0.2"
+crc = "^1.4"
+
+[dev-dependencies]
+mockers = { version = "0.6.1", path = "../sources/mockers/mockers" }
