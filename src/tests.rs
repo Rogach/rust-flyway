@@ -38,6 +38,14 @@ fn test_migration() -> Migration {
                Some(("1.0.2".into(), "ab__23".into())));
 }
 
+#[test] fn test_version_parse() {
+    assert_eq!(Flyway::parse_version("1"), vec![1]);
+    assert_eq!(Flyway::parse_version("1.2"), vec![1, 2]);
+    assert_eq!(Flyway::parse_version("1.2.0"), vec![1, 2, 0]);
+    assert_eq!(Flyway::parse_version("0.001.01"), vec![0, 1, 1]);
+    assert_eq!(Flyway::parse_version("0.010.01"), vec![0, 10, 1]);
+}
+
 #[test] fn test_database_newer() {
     let sc = Scenario::new();
     let reader = sc.create_mock_for::<Reader>();

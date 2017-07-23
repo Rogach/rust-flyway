@@ -5,7 +5,6 @@ extern crate itertools;
 extern crate regex;
 #[macro_use] extern crate lazy_static;
 extern crate crc;
-extern crate semver;
 #[macro_use] extern crate log;
 
 #[cfg(test)] mod tests;
@@ -15,7 +14,6 @@ use itertools::join;
 use regex::Regex;
 use crc::crc32;
 use std::collections::HashMap;
-use semver::Version;
 use std::cmp::Ordering;
 use std::time::Instant;
 
@@ -68,6 +66,14 @@ impl Flyway {
         })
     }
 
+    fn parse_version(v: &str) -> Vec<u32> {
+        v.split(".").map(|p| p.parse::<u32>().unwrap()).collect()
+    }
+
+    fn compare_migrations(a: &Migration, b: &Migration) -> Ordering {
+        Flyway::parse_version(&a.version).cmp(&Flyway::parse_version(&b.version))
+    }
+
     fn read_migration(file: MigrationFile) -> Result<Migration, String> {
         Flyway::parse_migration_name(&file.name).map(|(version, description)| {
             Migration {
@@ -94,10 +100,7 @@ impl Flyway {
             incoming_migrations.push(migration);
         }
 
-        let migration_comparator = |a: &Migration, b: &Migration| {
-            Version::parse(&a.version).unwrap().cmp(&Version::parse(&b.version).unwrap())
-        };
-        incoming_migrations.sort_by(&migration_comparator);
+        incoming_migrations.sort_by(Flyway::compare_migrations);
 
         let mut existing_migrations = self.driver.get_existing_migrations()?;
 
@@ -119,7 +122,7 @@ impl Flyway {
                 None => return Err(format!("Incoming migrations do not contain migration {} - seems you are running code that is older than database contents.", existing_migration.version))
             }
         }
-        existing_migrations.sort_by(&migration_comparator);
+        existing_migrations.sort_by(Flyway::compare_migrations);
 
         info!("Validated {} existing migrations", existing_migrations.len());
 
@@ -131,7 +134,7 @@ impl Flyway {
 
         if let Some(newest_existing_migration) = existing_migrations.iter().last() {
             info!("Current schema version: {}", newest_existing_migration.version);
-            if let Some(older_incoming_migration) = new_migrations.iter().find(|m| migration_comparator(newest_existing_migration, m) != Ordering::Less) {
+            if let Some(older_incoming_migration) = new_migrations.iter().find(|m| Flyway::compare_migrations(newest_existing_migration, m) != Ordering::Less) {
                 return Err(format!("Incoming new migration is older than existing: {}", older_incoming_migration.script));
             }
         }
