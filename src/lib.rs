@@ -85,6 +85,7 @@ impl Flyway {
     }
 
     pub fn execute(&self) -> Result<(), String> {
+        info!("Executing database migration");
         self.driver.ensure_schema_version_exists()?;
 
         let failed_migrations = self.driver.get_failed_migrations()?;
