@@ -1,0 +1,9 @@
+[package]
+name = "flyway-driver-mysql"
+version = "0.1.0"
+authors = ["Rogach <platon7pronko@gmail.com>"]
+
+[dependencies]
+flyway = { path = "../" }
+mysql = "*"
+regex = "^0.2"
