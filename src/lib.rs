@@ -6,6 +6,7 @@ extern crate regex;
 #[macro_use] extern crate lazy_static;
 extern crate crc;
 extern crate semver;
+#[macro_use] extern crate log;
 
 #[cfg(test)] mod tests;
 
@@ -84,6 +85,8 @@ impl Flyway {
     }
 
     pub fn execute(&self) -> Result<(), String> {
+        self.driver.ensure_schema_version_exists()?;
+
         let failed_migrations = self.driver.get_failed_migrations()?;
         if !failed_migrations.is_empty() {
             return Err(format!("Failed migrations detected! Roll back your database and start from a fresh backup. Failed migrations: {}", join(failed_migrations.iter().map(|m| &m.version), ", ")));
@@ -114,6 +117,8 @@ impl Flyway {
         }
         existing_migrations.sort_by(&migration_comparator);
 
+        info!("Validated {} existing migrations", existing_migrations.len());
+
         let existing_migrations_idx: HashMap<String, &Migration> =
             existing_migrations.iter().map(|m| (m.script.clone(), m)).collect();
 
@@ -121,26 +126,32 @@ impl Flyway {
             incoming_migrations.iter().filter(|m| !existing_migrations_idx.contains_key(&m.script)).collect();
 
         if let Some(newest_existing_migration) = existing_migrations.iter().last() {
+            info!("Current schema version: {}", newest_existing_migration.version);
             if let Some(older_incoming_migration) = new_migrations.iter().find(|m| migration_comparator(newest_existing_migration, m) != Ordering::Less) {
                 return Err(format!("Incoming new migration is older than existing: {}", older_incoming_migration.script));
             }
         }
 
-        for new_migration in new_migrations {
-            let mut new_migration = new_migration.to_owned();
-            let start = Instant::now();
-            let result = self.driver.execute_migration(new_migration.contents.clone());
-            let elapsed = start.elapsed();
-            new_migration.execution_time = (elapsed.as_secs() * 1000 + (elapsed.subsec_nanos() / 1_000_000) as u64) as i32;
-            match result {
-                Ok(()) => {
-                    new_migration.success = true;
-                    self.driver.save_migration(new_migration)?;
-                },
-                Err(error) => {
-                    new_migration.success = false;
-                    self.driver.save_migration(new_migration)?;
-                    return Err(error)
+        if new_migrations.is_empty() {
+            info!("Schema is up to date. No migration necessary.");
+        } else {
+            for new_migration in new_migrations {
+                info!("Migrating to version: {}", new_migration.version);
+                let mut new_migration = new_migration.to_owned();
+                let start = Instant::now();
+                let result = self.driver.execute_migration(new_migration.contents.clone());
+                let elapsed = start.elapsed();
+                new_migration.execution_time = (elapsed.as_secs() * 1000 + (elapsed.subsec_nanos() / 1_000_000) as u64) as i32;
+                match result {
+                    Ok(()) => {
+                        new_migration.success = true;
+                        self.driver.save_migration(new_migration)?;
+                    },
+                    Err(error) => {
+                        new_migration.success = false;
+                        self.driver.save_migration(new_migration)?;
+                        return Err(error)
+                    }
                 }
             }
         }
