@@ -5,5 +5,5 @@ authors = ["Rogach <platon7pronko@gmail.com>"]
 
 [dependencies]
 flyway = { path = "../" }
-mysql = "*"
+mysql = "^11.2"
 regex = "^0.2"
